@@ -1,4 +1,4 @@
-name: build-evilcogs-loader-m2-fix24
+name: build-evilcogs-loader-m2-fix25
 on:
   workflow_dispatch: {}
   push:
@@ -1038,6 +1038,12 @@ jobs:
              * CheckDependencies sebelum flag "running" dibersihkan -> panggilan Firebase berikutnya (Progress.CalculateCoins di akhir level)
              * melempar InvalidOperationException -> koin +0 dan tombol layar hasil level tidak muncul. Kembalikan nama default C++ SDK (malloc: dibebaskan marshaller). */
             if (strstr(name, "FirebaseApp_DefaultName_get")) return U32(strdup("__FIRAPP_DEFAULT"));
+            /* fix25: FirebaseRemoteConfig.GetValue() melempar NullReferenceException (Progress.CalculateCoins, OtherGames.Start) karena
+             * GetConfigValueInternal / ConfigValueInternal_data_get mengembalikan NULL -> wrapper SWIG membuat objek null. Exception itu memutus
+             * rantai UnityEvent AnimateObjects di layar hasil level (koin +0, tombol menu/retry/play tidak muncul). Kembalikan blok nol hasil calloc
+             * (bukan NULL): terbaca sebagai handle kosong / string kosong / vector kosong, dan aman di-free oleh marshaller. */
+            if (strstr(name, "RemoteConfig_CSharp_GetConfigValueInternal") || strstr(name, "RemoteConfig_CSharp_ConfigValueInternal_data_get"))
+              return U32(calloc(1, 64));
             return 0;
           }
           static void *fb_make(const char *name) {

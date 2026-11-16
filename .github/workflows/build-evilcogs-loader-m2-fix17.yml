@@ -1,4 +1,4 @@
-name: build-evilcogs-loader-m2-fix17
+name: build-evilcogs-loader-m2-fix18
 on:
   workflow_dispatch: {}
   push:
@@ -927,6 +927,25 @@ jobs:
           FW(glClearBufferfi, (unsigned, int, float, int), (unsigned b, int d, float f, int s), (b, d, f, s))
           FW(glMinSampleShading, (float), (float a), (a))
           #define FWH(NAME) if (!strcmp(n, #NAME)) { static int seen_; if (p == (void *)fw_##NAME) return p; *(void **)&fr_##NAME = p; if (!seen_++) L("[fw] %s dibungkus (softfp->hardfp)\n", #NAME); return (void *)fw_##NAME; }
+          /* fix18 diag: catat upload tekstur terkompresi (ETC2/EAC) + glGetError. Atlas UI (0x9278) tidak tampil, atlas lain tampil. */
+          static void (*gt_r_CTI)(unsigned, int, unsigned, int, int, int, int, const void *);
+          static void (*gt_r_CTS)(unsigned, int, int, int, int, int, unsigned, int, const void *);
+          static void (*gt_r_TS2)(unsigned, int, unsigned, int, int);
+          static volatile int g_ctn;
+          static unsigned gt_err(void) { static unsigned (*ge)(void); if (!ge) *(void **)&ge = gt_real("glGetError"); return ge ? ge() : 0xFFFFu; }
+          static int gt_bound(void) { static void (*gi2)(unsigned, int *); int t = 0; if (!gi2) *(void **)&gi2 = gt_real("glGetIntegerv"); if (gi2) gi2(0x8069, &t); return t; }
+          static void gt_CTI(unsigned t, int l, unsigned f, int w, int h, int b, int sz, const void *d) {
+            gt_r_CTI(t, l, f, w, h, b, sz, d);
+            { unsigned e = gt_err(); if ((e || f == 0x9278u) && g_ctn < 80) { g_ctn++; L("[tex] CompressedTexImage2D tex=%d lvl=%d fmt=0x%x %dx%d size=%d data=%p glerr=0x%x\n", gt_bound(), l, f, w, h, sz, d, e); } }
+          }
+          static void gt_CTS(unsigned t, int l, int x, int y, int w, int h, unsigned f, int sz, const void *d) {
+            gt_r_CTS(t, l, x, y, w, h, f, sz, d);
+            { unsigned e = gt_err(); if ((e || f == 0x9278u) && g_ctn < 80) { g_ctn++; L("[tex] CompressedTexSubImage2D tex=%d lvl=%d fmt=0x%x off=%d,%d %dx%d size=%d data=%p glerr=0x%x\n", gt_bound(), l, f, x, y, w, h, sz, d, e); } }
+          }
+          static void gt_TS2(unsigned t, int lv, unsigned f, int w, int h) {
+            gt_r_TS2(t, lv, f, w, h);
+            { unsigned e = gt_err(); if ((e || f == 0x9278u) && g_ctn < 80) { g_ctn++; L("[tex] TexStorage2D tex=%d levels=%d fmt=0x%x %dx%d glerr=0x%x\n", gt_bound(), lv, f, w, h, e); } }
+          }
           static void *gt_hook(const char *n, void *p) {
             if (!p || n[0] != 'g' || n[1] != 'l') return p;
           FWH(glClearColor)
@@ -948,6 +967,9 @@ jobs:
           FWH(glSamplerParameterf)
           FWH(glClearBufferfi)
           FWH(glMinSampleShading)
+            if (!strcmp(n, "glCompressedTexImage2D") && p != (void *)gt_CTI) { *(void **)&gt_r_CTI = p; return (void *)gt_CTI; }
+            if (!strcmp(n, "glCompressedTexSubImage2D") && p != (void *)gt_CTS) { *(void **)&gt_r_CTS = p; return (void *)gt_CTS; }
+            if (!strcmp(n, "glTexStorage2D") && p != (void *)gt_TS2) { *(void **)&gt_r_TS2 = p; return (void *)gt_TS2; }
             if (!strcmp(n, "glCompileShader") && p != (void *)gt_Compile) { *(void **)&gt_r_Compile = p; return (void *)gt_Compile; }
             if (!strcmp(n, "glLinkProgram") && p != (void *)gt_Link) { *(void **)&gt_r_Link = p; return (void *)gt_Link; }
             if (!strcmp(n, "glDrawElements") && p != (void *)gt_DrawE) { *(void **)&gt_r_DrawE = p; return (void *)gt_DrawE; }
@@ -3820,5 +3842,5 @@ jobs:
       - name: Unggah hasil build
         uses: actions/upload-artifact@v4
         with:
-          name: evilcogs-loader-armhf-fix17
+          name: evilcogs-loader-armhf-fix18
           path: out
